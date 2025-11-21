@@ -4,9 +4,17 @@ on:
   pull_request:
     branches:
       - main
+
   push:
     branches:
       - main
+
+  workflow_dispatch:
+    inputs:
+      version-range:
+        description: 'Version range (e.g., "latest", "all", "^1", "^1|^2")'
+        required: false
+        default: 'latest'
 
 permissions:
   contents: read
@@ -19,46 +27,137 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        id: setup-pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
-          cache: npm
+          cache: pnpm
 
       - name: Install Dependencies
-        id: npm-ci
-        run: npm ci
+        id: pnpm-install
+        run: pnpm install --frozen-lockfile
 
       - name: Check Format
-        id: npm-format-check
-        run: npm run format:check
+        id: pnpm-format-check
+        run: pnpm run format:check
 
       - name: Lint
-        id: npm-lint
-        run: npm run lint
+        id: pnpm-lint
+        run: pnpm run lint
 
       - name: Test
-        id: npm-ci-test
-        run: npm run ci-test
+        id: pnpm-ci-test
+        run: pnpm run ci-test
 
-  test-action:
-    name: GitHub Actions Test
+  generate-matrix:
+    name: Generate Build Matrix
     runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.test-action.outputs.matrix }}
 
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
-      - name: Test Local Action
+      - name: Test Local Action (Generate build matrix)
         id: test-action
         uses: ./
         with:
-          milliseconds: 2000
+          base-image: verdaccio/verdaccio
+          config-path: .github/base-image-versioner.yml
+          version-range: ${{ github.event.inputs.version-range || '' }}
 
       - name: Print Output
         id: output
-        run: echo "${{ steps.test-action.outputs.time }}"
+        run: echo "${{ steps.test-action.outputs.matrix }}"
+
+  test-action:
+    name: GitHub Actions Test
+    runs-on: ubuntu-latest
+    needs: generate-matrix
+
+    strategy:
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta (Docker Hub)
+        id: meta-pre
+        run: |
+          echo "digest=$(docker manifest inspect verdaccio/verdaccio:${{ matrix.version }} -v | jq -r '[.[]|select(.Descriptor.platform.architecture=="amd64")][0].Descriptor.digest')" >> $GITHUB_OUTPUT
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: iwf-web/verdaccio
+          labels: |
+            org.opencontainers.image.title=Verdaccio Docker Image
+            org.opencontainers.image.authors=D3strukt0r <dev@d3strukt0r.me>
+            org.opencontainers.image.documentation=${{ github.event.repository.html_url }}
+            org.opencontainers.image.vendor=IWF Web Solutions
+            org.opencontainers.image.ref.name=verdaccio/verdaccio
+            org.opencontainers.image.base.name=docker.io/verdaccio/verdaccio:${{ matrix.version }}
+            org.opencontainers.image.base.digest=${{ steps.meta-pre.outputs.digest }}
+          annotations: |
+            org.opencontainers.image.title=Verdaccio Docker Image
+            org.opencontainers.image.authors=D3strukt0r <dev@d3strukt0r.me>
+            org.opencontainers.image.documentation=${{ github.event.repository.html_url }}
+            org.opencontainers.image.vendor=IWF Web Solutions
+            org.opencontainers.image.ref.name=verdaccio/verdaccio
+            org.opencontainers.image.base.name=docker.io/verdaccio/verdaccio:${{ matrix.version }}
+            org.opencontainers.image.base.digest=${{ steps.meta-pre.outputs.digest }}
+
+      - name: Prepare build arguments and tags
+        id: prepare
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const buildArgs = ${{ toJSON(matrix.buildArgs) }};
+            const buildArgsString = Object.entries(buildArgs)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('\n');
+            core.setOutput('buildArgs', buildArgsString);
+
+            const tags = ${{ toJSON(matrix.tags) }};
+            const imageName = 'iwf-web/verdaccio';
+            const tagsString = tags.map(tag => `${imageName}:${tag}`).join(',');
+            core.setOutput('tags', tagsString);
+
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.contextPath }}
+          file: ${{ matrix.dockerfilePath }}
+          #platforms: linux/amd64,linux/arm64
+          build-args: ${{ steps.prepare.outputs.buildArgs }}
+          load: true
+          tags: ${{ steps.prepare.outputs.tags }}
+          #labels: ${{ steps.meta.outputs.labels }}
+          #annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Print build information
+        run: |
+          echo "Built version: ${{ matrix.version }}"
+          echo "Build name: ${{ matrix.name }}"
+          echo "Tags: ${{ join(matrix.tags, ', ') }}"

@@ -26,29 +26,32 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Setup pnpm
+        id: setup-pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
-          cache: npm
+          cache: pnpm
 
       - name: Install Dependencies
-        id: install
-        run: npm ci
+        id: pnpm-install
+        run: pnpm install --frozen-lockfile
 
       - name: Lint Codebase
         id: super-linter
         uses: super-linter/super-linter/slim@v8
         env:
-          CHECKOV_FILE_NAME: .checkov.yml
           DEFAULT_BRANCH: main
           FILTER_REGEX_EXCLUDE: dist/**/*
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           LINTER_RULES_PATH: .
           VALIDATE_ALL_CODEBASE: true
           VALIDATE_BIOME_FORMAT: false

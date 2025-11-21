@@ -1,305 +1,292 @@
-# Create a GitHub Action Using TypeScript
+# Docker Base Image Version CI Matrix Action
 
-![Linter](https://github.com/actions/typescript-action/actions/workflows/linter.yml/badge.svg)
-![CI](https://github.com/actions/typescript-action/actions/workflows/ci.yml/badge.svg)
-![Check dist/](https://github.com/actions/typescript-action/actions/workflows/check-dist.yml/badge.svg)
-![CodeQL](https://github.com/actions/typescript-action/actions/workflows/codeql-analysis.yml/badge.svg)
-![Coverage](./badges/coverage.svg)
+[![GitHub Super-Linter](https://github.com/iwf-web/docker-image-version-matrix-action/actions/workflows/linter.yml/badge.svg)](https://github.com/super-linter/super-linter)
+![CI](https://github.com/iwf-web/docker-image-version-matrix-action/actions/workflows/ci.yml/badge.svg)
+[![Check dist/](https://github.com/iwf-web/docker-image-version-matrix-action/actions/workflows/check-dist.yml/badge.svg)](https://github.com/iwf-web/docker-image-version-matrix-action/actions/workflows/check-dist.yml)
+[![CodeQL](https://github.com/iwf-web/docker-image-version-matrix-action/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/iwf-web/docker-image-version-matrix-action/actions/workflows/codeql-analysis.yml)
+[![Coverage](./badges/coverage.svg)](./badges/coverage.svg)
 
-Use this template to bootstrap the creation of a TypeScript action. :rocket:
+A GitHub Action that automatically generates a build matrix based on Docker base
+image versions. Perfect for maintaining Docker images that need to support
+multiple versions of a base image.
 
-This template includes compilation support, tests, a validation workflow,
-publishing, and versioning guidance.
+## Features
 
-If you are new, there's also a simpler introduction in the
-[Hello world JavaScript action repository](https://github.com/actions/hello-world-javascript-action).
+- 🔍 **Automatic Version Discovery**: Fetches available versions from Docker Hub
+- 🎯 **Flexible Version Selection**: Support for latest, all, or semantic
+  version ranges
+- 🔧 **Configurable Builds**: Define multiple build configurations with
+  different Dockerfiles and build arguments
+- 📦 **Matrix Output**: Generates GitHub Actions matrix for parallel builds
+- 🚀 **Easy Integration**: Simple YAML configuration
 
-## Create Your Own Action
+## Quick Start
 
-To create your own action, you can use this repository as a template! Just
-follow the below instructions:
+### Basic Usage
 
-1. Click the **Use this template** button at the top of the repository
-1. Select **Create a new repository**
-1. Select an owner and name for your new repository
-1. Click **Create repository**
-1. Clone your new repository
+```yaml
+name: Build Docker Images
 
-> [!IMPORTANT]
->
-> Make sure to remove or update the [`CODEOWNERS`](./CODEOWNERS) file! For
-> details on how to use this file, see
-> [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
+on:
+  push:
+    branches:
+      - main
 
-## Initial Setup
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Generate build matrix
+        id: generate
+        uses: iwf-web/docker-image-version-matrix-action@v1
+        with:
+          base-image: 'verdaccio/verdaccio'
 
-After you've cloned the repository to your local machine or codespace, you'll
-need to perform some initial setup steps before you can develop your action.
+  build:
+    needs: generate-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.contextPath }}
+          file: ${{ matrix.dockerfilePath }}
+          tags: ${{ join(matrix.tags, ',') }}
+```
 
-> [!NOTE]
->
-> You'll need to have a reasonably modern version of
-> [Node.js](https://nodejs.org) handy (20.x or later should work!). If you are
-> using a version manager like [`nodenv`](https://github.com/nodenv/nodenv) or
-> [`fnm`](https://github.com/Schniz/fnm), this template has a `.node-version`
-> file at the root of the repository that can be used to automatically switch to
-> the correct version when you `cd` into the repository. Additionally, this
-> `.node-version` file is used by GitHub Actions in any `actions/setup-node`
-> actions.
+## Configuration
 
-1. :hammer_and_wrench: Install the dependencies
+### Action Inputs
 
-   ```bash
-   npm install
-   ```
+| Input           | Description                                                             | Required | Default                            |
+| --------------- | ----------------------------------------------------------------------- | -------- | ---------------------------------- |
+| `base-image`    | The base Docker image (e.g., `verdaccio/verdaccio`)                     | Yes      | -                                  |
+| `config-path`   | Path to the configuration YAML file                                     | No       | `.github/base-image-versioner.yml` |
+| `version-range` | Version range override (e.g., `"latest"`, `"all"`, `"^1"`, `"^1\|^2"`). | No       | -                                  |
 
-1. :building_construction: Package the TypeScript for distribution
+### Action Outputs
 
-   ```bash
-   npm run bundle
-   ```
+| Output   | Description                                                   |
+| -------- | ------------------------------------------------------------- |
+| `matrix` | JSON string containing the build matrix with all combinations |
 
-1. :white_check_mark: Run the tests
+### Configuration File
 
-   ```bash
-   $ npm test
+Create a `.github/base-image-versioner.yml` file in your repository:
 
-   PASS  ./index.test.js
-     ✓ throws invalid number (3ms)
-     ✓ wait 500 ms (504ms)
-     ✓ test runs (95ms)
+```yaml
+# Strategy: 'latest', 'all', or 'semver'
+strategy: latest
 
-   ...
-   ```
+# Semver range (when strategy is 'semver')
+semverRange: '^1.0.0'
 
-## Update the Action Metadata
+# Maximum number of versions to build
+maxVersions: 5
 
-The [`action.yml`](action.yml) file defines metadata about your action, such as
-input(s) and output(s). For details about this file, see
-[Metadata syntax for GitHub Actions](https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions).
+# Build configurations
+builds:
+  - name: default
+    dockerfilePath: Dockerfile
+    contextPath: .
+    buildArgs:
+      NODE_ENV: production
+    tags:
+      - '{version}'
+      - 'latest'
 
-When you copy this repository, update `action.yml` with the name, description,
-inputs, and outputs for your action.
+  - name: alpine
+    dockerfilePath: Dockerfile.alpine
+    contextPath: .
+    buildArgs:
+      VARIANT: alpine
+    tags:
+      - '{version}-alpine'
+      - 'alpine'
+```
 
-## Update the Action Code
+### Version Selection Strategies
 
-The [`src/`](./src/) directory is the heart of your action! This contains the
-source code that will be run when your action is invoked. You can replace the
-contents of this directory with your own code.
+#### Latest (Default)
 
-There are a few things to keep in mind when writing your action code:
+Build only the most recent version:
 
-- Most GitHub Actions toolkit and CI/CD operations are processed asynchronously.
-  In `main.ts`, you will see that the action is run in an `async` function.
+```yaml
+strategy: latest
+```
 
-  ```javascript
-  import * as core from '@actions/core'
-  //...
+#### All Versions
 
-  async function run() {
-    try {
-      //...
-    } catch (error) {
-      core.setFailed(error.message)
+Build all available versions:
+
+```yaml
+strategy: all
+maxVersions: 10 # Optional limit
+```
+
+#### Semantic Version Range
+
+Build versions matching a semver range:
+
+```yaml
+strategy: semver
+semverRange: '^1.0.0' # All 1.x.x versions
+```
+
+```yaml
+strategy: semver
+semverRange: '>=2.0.0 <3.0.0' # All 2.x.x versions
+```
+
+#### Multiple Version Ranges
+
+Use pipe-separated ranges:
+
+```yaml
+strategy: semver
+semverRange: '^1|^2' # All 1.x.x and 2.x.x versions
+```
+
+Or override via workflow input:
+
+```yaml
+with:
+  base-image: 'node'
+  version-range: '^18|^20|^22'
+```
+
+## Examples
+
+### Example 1: Building Latest Version Only
+
+```yaml
+# .github/base-image-versioner.yml
+strategy: latest
+builds:
+  - name: default
+    dockerfilePath: Dockerfile
+    tags:
+      - '{version}'
+      - 'latest'
+```
+
+### Example 2: Multiple Variants
+
+```yaml
+# .github/base-image-versioner.yml
+strategy: semver
+semverRange: '^6'
+builds:
+  - name: default
+    dockerfilePath: Dockerfile
+    tags:
+      - '{version}'
+
+  - name: alpine
+    dockerfilePath: Dockerfile.alpine
+    buildArgs:
+      VARIANT: alpine
+    tags:
+      - '{version}-alpine'
+
+  - name: slim
+    dockerfilePath: Dockerfile.slim
+    buildArgs:
+      VARIANT: slim
+    tags:
+      - '{version}-slim'
+```
+
+### Example 3: Manual Workflow Trigger
+
+```yaml
+name: Build Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      version-range:
+        description: 'Version range (e.g., "latest", "all", "^1|^2")'
+        required: false
+        default: 'latest'
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: iwf-web/docker-image-version-matrix-action@v1
+        id: generate
+        with:
+          base-image: 'verdaccio/verdaccio'
+          version-range: ${{ github.event.inputs.version-range }}
+```
+
+## Matrix Output Format
+
+The action outputs a JSON matrix in this format:
+
+```json
+{
+  "include": [
+    {
+      "version": "1.2.3",
+      "name": "default",
+      "dockerfilePath": "Dockerfile",
+      "contextPath": ".",
+      "buildArgs": {
+        "BASE_IMAGE_VERSION": "1.2.3",
+        "BASE_IMAGE": "verdaccio/verdaccio",
+        "NODE_ENV": "production"
+      },
+      "tags": ["1.2.3", "latest"]
     }
-  }
-  ```
-
-  For more information about the GitHub Actions toolkit, see the
-  [documentation](https://github.com/actions/toolkit/blob/main/README.md).
-
-So, what are you waiting for? Go ahead and start customizing your action!
-
-1. Create a new branch
-
-   ```bash
-   git checkout -b releases/v1
-   ```
-
-1. Replace the contents of `src/` with your action code
-1. Add tests to `__tests__/` for your source code
-1. Format, test, and build the action
-
-   ```bash
-   npm run all
-   ```
-
-   > This step is important! It will run [`rollup`](https://rollupjs.org/) to
-   > build the final JavaScript action code with all dependencies included. If
-   > you do not run this step, your action will not work correctly when it is
-   > used in a workflow.
-
-1. (Optional) Test your action locally
-
-   The [`@github/local-action`](https://github.com/github/local-action) utility
-   can be used to test your action locally. It is a simple command-line tool
-   that "stubs" (or simulates) the GitHub Actions Toolkit. This way, you can run
-   your TypeScript action locally without having to commit and push your changes
-   to a repository.
-
-   The `local-action` utility can be run in the following ways:
-   - Visual Studio Code Debugger
-
-     Make sure to review and, if needed, update
-     [`.vscode/launch.json`](./.vscode/launch.json)
-
-   - Terminal/Command Prompt
-
-     ```bash
-     # npx @github/local action <action-yaml-path> <entrypoint> <dotenv-file>
-     npx @github/local-action . src/main.ts .env
-     ```
-
-   You can provide a `.env` file to the `local-action` CLI to set environment
-   variables used by the GitHub Actions Toolkit. For example, setting inputs and
-   event payload data used by your action. For more information, see the example
-   file, [`.env.example`](./.env.example), and the
-   [GitHub Actions Documentation](https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables).
-
-1. Commit your changes
-
-   ```bash
-   git add .
-   git commit -m "My first action is ready!"
-   ```
-
-1. Push them to your repository
-
-   ```bash
-   git push -u origin releases/v1
-   ```
-
-1. Create a pull request and get feedback on your action
-1. Merge the pull request into the `main` branch
-
-Your action is now published! :rocket:
-
-For information about versioning your action, see
-[Versioning](https://github.com/actions/toolkit/blob/main/docs/action-versioning.md)
-in the GitHub Actions toolkit.
-
-## Validate the Action
-
-You can now validate the action by referencing it in a workflow file. For
-example, [`ci.yml`](./.github/workflows/ci.yml) demonstrates how to reference an
-action in the same repository.
-
-```yaml
-steps:
-  - name: Checkout
-    id: checkout
-    uses: actions/checkout@v4
-
-  - name: Test Local Action
-    id: test-action
-    uses: ./
-    with:
-      milliseconds: 1000
-
-  - name: Print Output
-    id: output
-    run: echo "${{ steps.test-action.outputs.time }}"
+  ]
+}
 ```
 
-For example workflow runs, check out the
-[Actions tab](https://github.com/actions/typescript-action/actions)! :rocket:
+## Development
 
-## Usage
+### Initial Setup
 
-After testing, you can create version tag(s) that developers can use to
-reference different stable versions of your action. For more information, see
-[Versioning](https://github.com/actions/toolkit/blob/main/docs/action-versioning.md)
-in the GitHub Actions toolkit.
+1. Install dependencies:
 
-To include the action in a workflow in another repository, you can use the
-`uses` syntax with the `@` symbol to reference a specific branch, tag, or commit
-hash.
-
-```yaml
-steps:
-  - name: Checkout
-    id: checkout
-    uses: actions/checkout@v4
-
-  - name: Test Local Action
-    id: test-action
-    uses: actions/typescript-action@v1 # Commit with the `v1` tag
-    with:
-      milliseconds: 1000
-
-  - name: Print Output
-    id: output
-    run: echo "${{ steps.test-action.outputs.time }}"
-```
-
-## Publishing a New Release
-
-This project includes a helper script, [`script/release`](./script/release)
-designed to streamline the process of tagging and pushing new releases for
-GitHub Actions.
-
-GitHub Actions allows users to select a specific version of the action to use,
-based on release tags. This script simplifies this process by performing the
-following steps:
-
-1. **Retrieving the latest release tag:** The script starts by fetching the most
-   recent SemVer release tag of the current branch, by looking at the local data
-   available in your repository.
-1. **Prompting for a new release tag:** The user is then prompted to enter a new
-   release tag. To assist with this, the script displays the tag retrieved in
-   the previous step, and validates the format of the inputted tag (vX.X.X). The
-   user is also reminded to update the version field in package.json.
-1. **Tagging the new release:** The script then tags a new release and syncs the
-   separate major tag (e.g. v1, v2) with the new release tag (e.g. v1.0.0,
-   v2.1.2). When the user is creating a new major release, the script
-   auto-detects this and creates a `releases/v#` branch for the previous major
-   version.
-1. **Pushing changes to remote:** Finally, the script pushes the necessary
-   commits, tags and branches to the remote repository. From here, you will need
-   to create a new release in GitHub so users can easily reference the new tags
-   in their workflows.
-
-## Dependency License Management
-
-This template includes a GitHub Actions workflow,
-[`licensed.yml`](./.github/workflows/licensed.yml), that uses
-[Licensed](https://github.com/licensee/licensed) to check for dependencies with
-missing or non-compliant licenses. This workflow is initially disabled. To
-enable the workflow, follow the below steps.
-
-1. Open [`licensed.yml`](./.github/workflows/licensed.yml)
-1. Uncomment the following lines:
-
-   ```yaml
-   # pull_request:
-   #   branches:
-   #     - main
-   # push:
-   #   branches:
-   #     - main
+   ```bash
+   pnpm install
    ```
 
-1. Save and commit the changes
+2. Bundle the TypeScript:
 
-Once complete, this workflow will run any time a pull request is created or
-changes pushed directly to `main`. If the workflow detects any dependencies with
-missing or non-compliant licenses, it will fail the workflow and provide details
-on the issue(s) found.
+   ```bash
+   pnpm run bundle
+   ```
 
-### Updating Licenses
+3. Run tests:
 
-Whenever you install or update dependencies, you can use the Licensed CLI to
-update the licenses database. To install Licensed, see the project's
-[Readme](https://github.com/licensee/licensed?tab=readme-ov-file#installation).
+   ```bash
+   pnpm test
+   ```
 
-To update the cached licenses, run the following command:
+### Making Changes
 
-```bash
-licensed cache
-```
+1. Edit TypeScript files in `src/`
+2. Run `pnpm run bundle` to compile
+3. Run `pnpm test` to ensure tests pass
+4. Commit both `src/` and `dist/` changes
 
-To check the status of cached licenses, run the following command:
+## Contributing
 
-```bash
-licensed status
-```
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE.txt)
+file for details.

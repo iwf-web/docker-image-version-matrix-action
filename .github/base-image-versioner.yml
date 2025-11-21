@@ -1,0 +1,21 @@
+# Base Image Versioner Configuration Example
+# This file configures how Docker base image versions are selected for building
+
+# Strategy for selecting versions:
+# - 'latest': Only build the latest version (default)
+# - 'all': Build all available versions
+# - 'semver': Use a semantic version range to filter versions
+strategy: latest
+
+# Build configurations
+# You can define multiple build configurations with different settings
+builds:
+  # Default build configuration
+  - name: default
+    dockerfilePath: ./__tests__/docker/Dockerfile
+    contextPath: ./__tests__/docker
+    buildArgs:
+      VERDACCIO_VERSION: '{version}'
+    tags:
+      - '{version}'
+      - 'latest'

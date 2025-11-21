@@ -1,0 +1,52 @@
+# Base Image Versioner Configuration Example
+# This file configures how Docker base image versions are selected for building
+
+# Strategy for selecting versions:
+# - 'latest': Only build the latest version (default)
+# - 'all': Build all available versions
+# - 'semver': Use a semantic version range to filter versions
+strategy: latest
+
+# Semantic version range (only used when strategy is 'semver')
+# Examples:
+#   - '^1.0.0' - All 1.x.x versions
+#   - '>=2.0.0 <3.0.0' - All 2.x.x versions
+#   - '^1|^2' - All 1.x.x and 2.x.x versions (pipe-separated ranges)
+semverRange: '^1.0.0'
+
+# Maximum number of versions to build (optional)
+# This limits the total number of versions regardless of strategy
+maxVersions: 5
+
+# Build configurations
+# You can define multiple build configurations with different settings
+builds:
+  # Default build configuration
+  - name: default
+    dockerfilePath: Dockerfile
+    contextPath: .
+    buildArgs:
+      NODE_ENV: production
+    tags:
+      - '{version}'
+      - 'latest'
+
+  # Example: Alpine variant
+  - name: alpine
+    dockerfilePath: Dockerfile.alpine
+    contextPath: .
+    buildArgs:
+      VARIANT: alpine
+    tags:
+      - '{version}-alpine'
+      - 'alpine'
+
+  # Example: Debian variant
+  - name: debian
+    dockerfilePath: Dockerfile.debian
+    contextPath: .
+    buildArgs:
+      VARIANT: debian
+    tags:
+      - '{version}-debian'
+      - 'debian'

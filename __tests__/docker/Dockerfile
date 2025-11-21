@@ -1,0 +1,3 @@
+ARG BASE_IMAGE_VERSION
+
+FROM verdaccio/verdaccio:$BASE_IMAGE_VERSION

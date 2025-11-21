@@ -1,24 +1,34 @@
-name: The name of your action here
-description: Provide a description here
-author: Your name or organization here
+name: Docker Base Image Version CI Matrix
+description: Build a CI matrix based on base Docker image version tags
+author: iwf-web
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: heart
-  color: red
+  icon: package
+  color: blue
 
 # Define your inputs here.
 inputs:
-  milliseconds:
-    description: Your input description here
+  base-image:
+    description: 'The base Docker image (e.g., verdaccio/verdaccio)'
     required: true
-    default: '1000'
+  config-path:
+    description: 'Path to the configuration YAML file'
+    required: false
+    default: '.github/base-image-versioner.yml'
+  version-range:
+    description:
+      'Version range to build (e.g., "latest", "all", "^1", "^1|^2"). Overrides
+      config file strategy.'
+    required: false
+    default: ''
 
 # Define your outputs here.
 outputs:
-  time:
-    description: Your output description here
+  matrix:
+    description:
+      'JSON string containing the build matrix with versions and configurations'
 
 runs:
   using: node24
-  main: dist/index.js
+  main: dist/index.cjs

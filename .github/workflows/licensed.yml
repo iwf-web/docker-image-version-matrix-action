@@ -8,12 +8,12 @@ on:
   # Uncomment the below lines to run this workflow on pull requests and pushes
   # to the default branch. This is useful for checking licenses before merging
   # changes into the default branch.
-  # pull_request:
-  #   branches:
-  #     - main
-  # push:
-  #   branches:
-  #     - main
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -27,18 +27,22 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        id: setup-pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
-          cache: npm
+          cache: pnpm
 
       - name: Install Dependencies
-        id: npm-ci
-        run: npm ci
+        id: pnpm-install
+        run: pnpm install --frozen-lockfile
 
       - name: Setup Ruby
         id: setup-ruby
@@ -49,7 +53,7 @@ jobs:
       - uses: licensee/setup-licensed@v1.3.2
         with:
           version: 4.x
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ github.token }}
 
       # If this is a workflow_dispatch event, update the cached licenses.
       - if: ${{ github.event_name == 'workflow_dispatch' }}

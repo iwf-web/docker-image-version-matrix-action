@@ -1,7 +1,40 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/typescript-node
 {
   "name": "GitHub Actions (TypeScript)",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
-  "postCreateCommand": "npm install",
+
+  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
+
+  "remoteEnv": {
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
+  },
+
+  // Features to add to the dev container. More info: https://containers.dev/features.
+  "features": {
+    "ghcr.io/devcontainers-extra/features/apt-packages:1": {
+      "packages": "cmake,pkg-config"
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "configureZshAsDefaultShell": true
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers-extra/features/act:1": {},
+    "ghcr.io/devcontainers-community/npm-features/prettier:1": {},
+    "ghcr.io/devcontainers/features/ruby:1": {}
+  },
+
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  // "forwardPorts": [],
+
+  // Use 'postCreateCommand' to run commands after the container is created.
+  "onCreateCommand": "docker pull catthehacker/ubuntu:act-latest && gem install licensed && corepack enable",
+  "postCreateCommand": "pnpm install",
+
+  // Configure tool-specific properties.
   "customizations": {
     "codespaces": {
       "openFiles": ["README.md"]
@@ -11,12 +44,14 @@
         "bierner.markdown-preview-github-styles",
         "davidanson.vscode-markdownlint",
         "dbaeumer.vscode-eslint",
+        "editorconfig.editorconfig",
         "esbenp.prettier-vscode",
         "github.copilot",
         "github.copilot-chat",
         "github.vscode-github-actions",
         "github.vscode-pull-request-github",
         "me-dutour-mathieu.vscode-github-actions",
+        "ms-azuretools.vscode-docker",
         "redhat.vscode-yaml",
         "rvest.vs-code-prettier-eslint",
         "yzhang.markdown-all-in-one"
@@ -30,12 +65,8 @@
         "markdown.extension.orderedList.marker": "one"
       }
     }
-  },
-  "remoteEnv": {
-    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
-  },
-  "features": {
-    "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers-community/npm-features/prettier:1": {}
   }
+
+  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+  // "remoteUser": "root"
 }
